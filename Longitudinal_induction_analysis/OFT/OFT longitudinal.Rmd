@@ -13,16 +13,27 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Load data
 ```{r}
-#setwd("~/Documents/TDP control files/Longitudinal induction analysis/OFT/")
+
 # Loading
 library(pacman)
 p_load(readxl, tidyverse)
 p_load(broom, ggsignif, multcomp, emmeans, DescTools)
+pacman::p_load(readxl)
 # xlsx files
 df <- read_excel("OFT_longitudinal_data.xlsx")
 
 ```
 
+
+Removal of mouse 224 from dataset it turned it it was not double transgenic
+```{r}
+#df$ID<- as.numeric(df$ID) #Change mouse number from class character to class numeric
+df<-df[!(df$ID==224),] 
+df<-df[!(df$ID==281),] 
+df<-df[!(df$ID==262),] 
+
+
+```
 
 
 We will look at two parameters:
@@ -33,6 +44,9 @@ Time spent moving:
 ```{r}
 # divide by time not spent moving
 df<-  df %>% mutate(relative_time_moving=(df$`Movement cumulative s`/(df$`Time not moving cumulative s`+df$`Movement cumulative s`))*100)
+
+df$distance <- df$`Distance moved cm`
+
 ```
 
 Periphery preference:
@@ -90,7 +104,7 @@ df_complete %>%
 by(df_complete$distance, df_complete$Week, shapiro.test)
 
 #sphericity - similar to the homogeneity of variance in between-group anova)
-#sphericity not broken
+
 anova_test(data = df_complete, dv = distance, wid = ID, within = Week)
 
 #F Indicates that we are comparing to an F-distribution (F-test); (2, 18) indicates the degrees of freedom in the numerator (DFn) and the denominator (DFd), respectively; 55.5 indicates the obtained F-statistic value
@@ -127,35 +141,7 @@ summary(posthoc_bonf)
 
 ```
 
-
-
-
-```{r}
-#Loading packages for linear mixed effects modelling
-library(lmerTest)
-library(lme4)
-
-df$distance <- df$`Distance moved cm`
-
-#creating a linear model of the same variables as included in the anova
-m_anova <- lmer(distance ~ Week + (1 | ID), data = df)
-summary(m_anova)
-
-# Obtain estimated marginal means
-emmeans_results <- emmeans(m_anova, ~ Week)
-
-# Perform pairwise comparisons
-pairwise_results <- contrast(emmeans_results, method = "pairwise", adjust = "tukey")
-
-# Display the results
-summary(pairwise_results)
-
-#bonferroni
-pwc <- pairs(emmeans_results, adjust = "bon")
-pwc
-```
-
-
+Plot rmANOVA
 
 ```{r}
 cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
@@ -188,6 +174,109 @@ ggplot(df_complete, aes(x = Week, y = distance)) +
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
   geom_errorbar(data = df_complete, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
   theme(text = element_text(size = 13))
+
+```
+
+
+#LMM
+
+```{r}
+#Loading packages for linear mixed effects modelling
+library(lmerTest)
+library(lme4)
+
+
+#creating a linear model of the same variables as included in the anova
+m_anova <- lmer(distance ~ Week + (1 | ID), data = df)
+summary(m_anova)
+
+# Obtain estimated marginal means
+emmeans_results <- emmeans(m_anova, ~ Week)
+
+# Perform pairwise comparisons
+pairwise_results <- contrast(emmeans_results, method = "pairwise", adjust = "tukey")
+
+# Display the results
+summary(pairwise_results)
+
+#bonferroni
+pwc <- pairs(emmeans_results, adjust = "bon")
+pwc
+
+#qqnorm(res <- residuals(m_anova))
+```
+Attempt at estimating sample size
+
+```{r}
+library(lme4)
+```
+
+
+```{r}
+
+library(simr)
+
+effect_size <- 0.3  
+alpha <- 0.05     
+power <- 0.80       
+
+design <- lme4::lmer(distance ~ Week + (1 | ID), data = df)
+
+# Calculate power
+power_analysis <- powerSim(design, nsim = 1000)
+power_analysis
+
+
+
+```
+
+```{r}
+# Install and load necessary packages
+install.packages("pwr")
+library(pwr)
+
+# Define parameters
+effect_size <- 0.3  # estimated effect size
+alpha <- 0.05       # significance level
+power <- 0.80       # desired power
+
+# Calculate sample size for a two-group comparison
+n <- pwr.anova.test(f = 0.3, n = NULL, sig.level = alpha, power = power, k = 3)$n
+print(paste("Required sample size:", round(n)))
+```
+
+
+
+Plot LMM
+
+
+
+```{r}
+
+df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(df, aes(x = Week, y = distance)) +
+  geom_beeswarm(data = df, size = 2.5, aes(color = ID)) +
+  ylab("Distance (cm)") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 9000,
+              annotations = c("0.3664")) +
+  geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 8500,
+              annotations = c("0.0001")) +
+  geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 8000,
+              annotations = c("0.0062")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = df_complete, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+
 
 ```
 
@@ -251,7 +340,7 @@ ggplot(df_complete, aes(x = Week, y = periphery_preference)) +
 #               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
 #  scale_fill_manual(values = cbbPalette) +
 #  scale_colour_manual(values = cbbPalette) +
-  ylab("periphery preference") +
+  ylab("Periphery preference") +
   xlab("Timepoint") +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
@@ -332,7 +421,7 @@ test(ph) # for p values
 
 
 ```
-
+#LMM
 
 ```{r}
 #Loading packages for linear mixed effects modelling
@@ -364,25 +453,20 @@ p_load(ggbeeswarm, ggsignif)
 
 ggplot(df, aes(x = Week, y = periphery_preference)) +
   geom_beeswarm(data = df, size = 2.5, aes(color = ID)) +
-#  geom_dotplot(aes(fill = ID, color = ID), binaxis = 'y', binwidth = 1,
-#               method = "histodot", stackratio = 1, dotsize = 0.5,
-#               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
-#  scale_fill_manual(values = cbbPalette) +
-#  scale_colour_manual(values = cbbPalette) +
-  ylab("periphery preference") +
+  ylab("Periphery Preference %") +
   xlab("Timepoint") +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
               y_position = 110,
-              annotations = c("***")) +
+              annotations = c("0.0018")) +
   geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
               map_signif_level = TRUE,
               y_position = 105,
-              annotations = c("***")) +
+              annotations = c("0.0001")) +
   geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
               map_signif_level = TRUE,
               y_position = 100,
-              annotations = c("ns")) +
+              annotations = c("0.5019")) +
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
   geom_errorbar(data = df, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
   theme(text = element_text(size = 13))

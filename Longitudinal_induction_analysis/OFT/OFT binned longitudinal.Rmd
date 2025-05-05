@@ -78,6 +78,7 @@ From chatgpt - LMM approach with specific comparisons
 df$distance <- df$`Distance moved cm`
 df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
 
+p_load(lme4)
 
 model <- lmer(distance ~ Week*Timebin + (1 | ID), data = df)
 #Compare First vs. Last 5 Minutes within Each Week
@@ -90,10 +91,7 @@ emmeans(model, pairwise ~ Week | Timebin, adjust = "bonferroni")
 
 ```
 
-```{r}
-#p_load(performance)
-check_model(model)
-```
+
 
 ```{r}
 # Ensure 'Week' and 'timebin' are factors with appropriate levels
@@ -115,28 +113,28 @@ ggplot(df, aes(x = interaction(Week, Timebin), y = distance)) +
   geom_signif(comparisons = list(c("Preinduction.Timebin 1", "1st week post induction.Timebin 1")),
               map_signif_level = TRUE,
               y_position = 4700,
-              annotations = c("0.0420")) +
+              annotations = c("0.3907")) +
   geom_signif(comparisons = list(c("Preinduction.Timebin 1", "2nd week post induction.Timebin 1")),
               map_signif_level = TRUE,
               y_position = 5300,
-              annotations = c("0.0001")) +
+              annotations = c("0.0038")) +
   geom_signif(comparisons = list(c("1st week post induction.Timebin 1", "2nd week post induction.Timebin 1")),
               map_signif_level = TRUE,
               y_position = 5000,
-              annotations = c("0.0899")) +
+              annotations = c("0.1910")) +
   
     geom_signif(comparisons = list(c("Preinduction.Timebin 2", "1st week post induction.Timebin 2")),
               map_signif_level = TRUE,
               y_position = 4700,
-              annotations = c("0.0822")) +
+              annotations = c("0.5584")) +
   geom_signif(comparisons = list(c("Preinduction.Timebin 2", "2nd week post induction.Timebin 2")),
               map_signif_level = TRUE,
               y_position = 5300,
-              annotations = c("0.0005")) +
+              annotations = c("0.0001")) +
   geom_signif(comparisons = list(c("1st week post induction.Timebin 2", "2nd week post induction.Timebin 2")),
               map_signif_level = TRUE,
               y_position = 5000,
-              annotations = c("0.1315")) +
+              annotations = c("0.0048")) +
 
   # Add mean and error bars
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
@@ -167,15 +165,15 @@ ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = distance)) +
   geom_signif(comparisons = list(c("Timebin 1 Preinduction", "Timebin 2 Preinduction")),
               map_signif_level = TRUE,
               y_position = 4700,
-              annotations = c("0.1136")) +
+              annotations = c("0.0451")) +
   geom_signif(comparisons = list(c("Timebin 1 1st week post induction", "Timebin 2 1st week post induction")),
               map_signif_level = TRUE,
               y_position = 5000,
-              annotations = c("0.0647")) +
+              annotations = c("0.0285")) +
   geom_signif(comparisons = list(c("Timebin 1 2nd week post induction", "Timebin 2 2nd week post induction")),
               map_signif_level = TRUE,
               y_position = 5300,
-              annotations = c("0.0735")) +
+              annotations = c("0.4695")) +
   
   # Add mean and error bars
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5, position = position_dodge(width = 0.75)) +
@@ -208,10 +206,7 @@ emmeans(model, pairwise ~ Week | Timebin, adjust = "bonferroni")
 #plot(emmeans(model, ~ Week * Timebin))
 
 ```
-```{r}
-#p_load(performance)
-check_model(model)
-```
+
 
 ```{r}
 # Ensure 'Week' and 'timebin' are factors with appropriate levels
@@ -241,20 +236,20 @@ ggplot(df, aes(x = interaction(Week, Timebin), y = periphery_preference)) +
   geom_signif(comparisons = list(c("1st week post induction.Timebin 1", "2nd week post induction.Timebin 1")),
               map_signif_level = TRUE,
               y_position = 120,
-              annotations = c("1.0000")) +
+              annotations = c("0.4684")) +
   
     geom_signif(comparisons = list(c("Preinduction.Timebin 2", "1st week post induction.Timebin 2")),
               map_signif_level = TRUE,
               y_position = 100,
-              annotations = c("0.0035")) +
+              annotations = c("0.0424")) +
   geom_signif(comparisons = list(c("Preinduction.Timebin 2", "2nd week post induction.Timebin 2")),
               map_signif_level = TRUE,
               y_position = 110,
-              annotations = c("<.0001")) +
+              annotations = c("0.0152")) +
   geom_signif(comparisons = list(c("1st week post induction.Timebin 2", "2nd week post induction.Timebin 2")),
               map_signif_level = TRUE,
               y_position = 120,
-              annotations = c("0.1926")) +
+              annotations = c("1.0000")) +
 
   # Add mean and error bars
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
@@ -262,8 +257,7 @@ ggplot(df, aes(x = interaction(Week, Timebin), y = periphery_preference)) +
   
   # Improve theme
   theme(text = element_text(size = 13),
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
-   ylim(60,125)
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
 
 ```
 
@@ -285,15 +279,15 @@ ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = periphery_preferen
   geom_signif(comparisons = list(c("Timebin 1 Preinduction", "Timebin 2 Preinduction")),
               map_signif_level = TRUE,
               y_position = 100,
-              annotations = c("0.1517")) +
+              annotations = c("0.5070")) +
   geom_signif(comparisons = list(c("Timebin 1 1st week post induction", "Timebin 2 1st week post induction")),
               map_signif_level = TRUE,
               y_position = 110,
-              annotations = c("0.1345")) +
+              annotations = c("0.0876")) +
   geom_signif(comparisons = list(c("Timebin 1 2nd week post induction", "Timebin 2 2nd week post induction")),
               map_signif_level = TRUE,
               y_position = 120,
-              annotations = c("0.7236")) +
+              annotations = c("0.0129")) +
   
   # Add mean and error bars
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5, position = position_dodge(width = 0.75)) +
@@ -301,7 +295,12 @@ ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = periphery_preferen
   
   # Improve theme
   theme(text = element_text(size = 13),
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
-  ylim(60,125)
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
 
 ```
+
+
+
+
+
+

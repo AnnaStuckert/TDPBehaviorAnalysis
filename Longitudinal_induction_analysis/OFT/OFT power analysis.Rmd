@@ -1,0 +1,244 @@
+---
+title: "OFT"
+output:
+  pdf_document: default
+  html_document: default
+date: '2022-12-05'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Load data
+```{r}
+
+# Loading
+library(pacman)
+p_load(readxl, tidyverse)
+p_load(broom, ggsignif, multcomp, emmeans, DescTools)
+pacman::p_load(readxl)
+# xlsx files
+df <- read_excel("OFT_longitudinal_data.xlsx")
+
+```
+
+Removal of mouse 224, 281, 262 from dataset as it turned they were not double transgenic
+```{r}
+df<-df[!(df$ID==224),] 
+df<-df[!(df$ID==281),] 
+df<-df[!(df$ID==262),] 
+
+
+```
+
+```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+
+
+# Rename column for easier access
+df <- df %>%
+  rename(distance = `Distance moved cm`)
+
+# Group by 'Week' and calculate mean and standard deviation
+summary_stats <- df %>%
+  group_by(Week) %>%
+  summarise(
+    mean_distance = mean(distance, na.rm = TRUE),
+    sd_distance = sd(distance, na.rm = TRUE)
+  )
+
+# Print results
+print(summary_stats)
+
+```
+
+
+My data, testing simple dropout scenario
+
+```{r}
+#Generate complete data (no missingness initially)
+n <- 13  # Total of 13 mice
+
+# Generate a random offset factor for each mouse
+offset <- rnorm(n, 0, 5)
+
+# Generate the data for 3 weeks for each mouse
+df <- data.frame(
+  id    = 1:n,
+  week1 = rnorm(n, 4682.097	, 844.2551) + offset,
+  week2 = rnorm(n, 5136.659	, 920.0022	) + offset,
+  week3 = rnorm(n, 6197.830, 920.0022) + offset
+)
+
+#Dropout in Week 3 (2 mice drop out in the original data, so I replicate that here) 
+# Identify 2 mice that drop out in Week 3 randomly
+set.seed(123) 
+drop_out_week3 <- sample(1:n, 2)  # Randomly choose 2 mice to drop out
+
+# Set Week 3 to missing for those who dropped out
+df$week3[drop_out_week3] <- NA
+
+# Print the resulting dataframe
+print(df)
+
+```
+
+```{r}
+generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
+  
+  set.seed(seed)
+  
+  # Generate an offset for each mouse
+  offset <- rnorm(n_mice, 0, 5)
+  
+  # Base means and SDs for each week (from your real summary data)
+  pre_mean  <- 4682.097
+  pre_sd    <- 844.2551
+  week1_mean <- 5136.659
+  week1_sd   <- 920.0022
+  week2_mean <- 6197.830
+  week2_sd   <- 920.0022
+  
+  # If no effect, keep all weeks similar
+  if (!effect) {
+    week1_mean <- pre_mean
+    week2_mean <- pre_mean
+  }
+  
+  # Generate data
+  df <- data.frame(
+    id = 1:n_mice,
+    week_preinduction = rnorm(n_mice, pre_mean, pre_sd) + offset,
+    week_post1 = rnorm(n_mice, week1_mean, week1_sd) + offset,
+    week_post2 = rnorm(n_mice, week2_mean, week2_sd) + offset
+  )
+  
+  # Simulate dropout: randomly make 2 mice missing in week_post2
+  drop_out <- sample(1:n_mice, 2)
+  df$week_post2[drop_out] <- NA
+  
+  return(df)
+}
+```
+
+
+```{r}
+library(lmerTest)
+library(dplyr)
+library(tidyr)
+library(future.apply)
+
+# Function to generate simulated data
+generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
+  set.seed(seed)
+  offset <- rnorm(n_mice, 0, 5)
+
+  pre_mean  <- 4682.097
+  pre_sd    <- 844.2551
+  week1_mean <- 5136.659
+  week1_sd   <- 920.0022
+  week2_mean <- 6197.830
+  week2_sd   <- 920.0022
+
+  if (!effect) {
+    week1_mean <- pre_mean
+    week2_mean <- pre_mean
+  }
+
+  df <- data.frame(
+    id = 1:n_mice,
+    week_preinduction = rnorm(n_mice, pre_mean, pre_sd) + offset,
+    week_post1 = rnorm(n_mice, week1_mean, week1_sd) + offset,
+    week_post2 = rnorm(n_mice, week2_mean, week2_sd) + offset
+  )
+
+  drop_out <- sample(1:n_mice, 2)
+  df$week_post2[drop_out] <- NA
+
+  return(df)
+}
+
+n_simulations <- 1000
+plan(multisession, workers = max(1, parallel::detectCores() - 2))
+
+# Simulation loop
+results <- future_lapply(1:n_simulations, function(i) {
+  df_effect <- generate_mouse_data(seed = i, effect = TRUE) %>%
+    pivot_longer(starts_with("week"), names_to = "week_number", values_to = "distance")
+  df_null <- generate_mouse_data(seed = i + 1, effect = FALSE) %>%
+    pivot_longer(starts_with("week"), names_to = "week_number", values_to = "distance")
+
+  df_effect$week_number <- factor(df_effect$week_number, levels = c("week_preinduction", "week_post1", "week_post2"))
+  df_null$week_number <- factor(df_null$week_number, levels = c("week_preinduction", "week_post1", "week_post2"))
+
+  m_effect <- tryCatch(
+    lmer(distance ~ week_number + (1 | id), data = df_effect),
+    error = function(e) NULL
+  )
+  m_null <- tryCatch(
+    lmer(distance ~ week_number + (1 | id), data = df_null),
+    error = function(e) NULL
+  )
+
+  get_pvals <- function(model) {
+    if (is.null(model)) return(rep(NA, 2))
+    p <- summary(model)$coefficients[, "Pr(>|t|)"]
+    return(p[c("week_numberweek_post1", "week_numberweek_post2")])
+  }
+
+  list(
+    p_effect = get_pvals(m_effect),
+    p_null = get_pvals(m_null),
+    singular_effect = if (!is.null(m_effect)) isSingular(m_effect) else NA,
+    singular_null = if (!is.null(m_null)) isSingular(m_null) else NA
+  )
+}, future.seed = TRUE)
+
+# Organize p-values
+p_names <- c("week_post1", "week_post2")
+p_values <- lapply(1:2, function(j) {
+  data.frame(
+    predictor = p_names[j],
+    p_effect = sapply(results, function(x) x$p_effect[j]),
+    p_null = sapply(results, function(x) x$p_null[j])
+  )
+})
+p_values_df <- bind_rows(p_values)
+
+# Mark significance
+p_values_df <- p_values_df %>%
+  mutate(
+    significant_effect = p_effect < 0.05,
+    significant_null = p_null < 0.05
+  )
+
+# Summarise p-value significance
+p_values_summary <- p_values_df %>%
+  group_by(predictor) %>%
+  summarise(
+    significant_effect = mean(significant_effect, na.rm = TRUE) * 100,
+    significant_null = mean(significant_null, na.rm = TRUE) * 100,
+    .groups = "drop"
+  )
+
+# Summarise singularity
+singular_summary <- data.frame(
+  singular_effect = sapply(results, function(x) x$singular_effect),
+  singular_null = sapply(results, function(x) x$singular_null)
+)
+
+singular_table_effect <- table(singular_summary$singular_effect, useNA = "ifany")
+singular_table_null <- table(singular_summary$singular_null, useNA = "ifany")
+
+# Print results
+print(p_values_summary)
+cat("\nSingular Fit Summary (Effect Model):\n")
+print(singular_table_effect)
+cat("\nSingular Fit Summary (Null Model):\n")
+print(singular_table_null)
+
+```
