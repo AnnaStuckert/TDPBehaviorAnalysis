@@ -1,0 +1,626 @@
+---
+title: "3CT"
+output:
+  pdf_document: default
+  html_document: default
+date: '2022-12-02'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load data
+```{r}
+
+# Loading
+library(pacman)
+p_load(readxl, tidyverse)
+p_load(broom, ggsignif, multcomp, emmeans)
+# xlsx files
+#df <- read_excel("3CT_smaller_zones_multicond_longitudinal_data.xlsx") # multicond body in 5 cm zone,nose in 1 cm zone MAKE SURE TO EDIT THE WRONGLY SIZES 5CM ZONE FOR COHORT 1!!!
+df <- read_excel("3ct_1cm_longitudinal_data.xlsx") # same zones but only nose in 1 cm zone
+#df <- read_excel("3CT_larger_arena.xlsx") #this fiel for larger arena
+
+```
+
+
+
+Removal of mouse 224 from dataset it turned it it was not double transgenic
+```{r}
+#df$ID<- as.numeric(df$ID) #Change mouse number from class character to class numeric
+df<-df[!(df$ID==224),] 
+
+```
+
+
+
+Data set where participants not completing all data collection time points are sorted out
+
+```{r}
+# Determine the weeks each participant should have
+required_weeks <- df %>% 
+  distinct(Week) %>% 
+  pull()
+
+# Count the number of weeks each participant has data for
+participant_week_counts <- df %>%
+  group_by(ID) %>%
+  summarize(week_count = n_distinct(Week))
+
+# Identify participants with data for all required weeks
+complete_participants <- participant_week_counts %>%
+  filter(week_count == length(required_weeks)) %>%
+  pull(ID)
+
+# Filter the dataset to include only complete participants
+df_complete <- df %>%
+  filter(ID %in% complete_participants)
+
+# View the new dataset
+head(df_complete)
+```
+
+We will primarily analyse time spent in the different zones. We expect:
+
+Habituation phase: time spent in neutral, social, and novel zone will be equal.
+For social phase (1 mouse introduced): time spent in social will be bigger than neutral and novel zone combined.
+for novelty phase (1 novel mouse introduced into novelty zone): time spent in novelty zone will be bigger then in neutral and social zone combined.
+
+
+Divide dataset up into Habituation, social, and novelty phases
+
+```{r}
+#habituation_cond <-  df_complete %>% filter(Condition == "Hab")
+#social_cond<-  df_complete %>% filter(Condition == "Social")
+#novelty_cond<-  df_complete %>% filter(Condition == "Novel")
+
+#use this for LMM approach with full sample size
+habituation_cond <-  df %>% filter(Condition == "Hab")
+social_cond<-  df %>% filter(Condition == "Social")
+novelty_cond<-  df %>% filter(Condition == "Novel")
+```
+
+
+```{r}
+
+habituation_cond <- habituation_cond %>% mutate(social_preference_relative=((`In zone SocialZone multiCond cumulative s`-`In zone NoveltyZone multiCond cumulative s`)/(`In zone NoveltyZone multiCond cumulative s`+`In zone SocialZone multiCond cumulative s`)))
+
+
+#As described in Baronio 2015 
+#https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0116363&type=printable 
+
+social_cond <- social_cond %>% mutate(social_preference_relative=((`In zone SocialZone multiCond cumulative s`-`In zone NoveltyZone multiCond cumulative s`)/(`In zone NoveltyZone multiCond cumulative s`+`In zone SocialZone multiCond cumulative s`)))
+
+novelty_cond <- novelty_cond %>% mutate(novelty_preference_relative=((`In zone NoveltyZone multiCond cumulative s`-`In zone SocialZone multiCond cumulative s`)/(`In zone SocialZone multiCond cumulative s`+`In zone NoveltyZone multiCond cumulative s`)))
+
+```
+
+
+#Repeated measures ANOVA
+
+Assumption checks
+
+```{r}
+
+social_cond$ID <- as.factor(social_cond$ID)
+
+
+p_load(rstatix)
+#outliers - 1
+social_cond %>%
+  group_by(Week) %>%
+  identify_outliers(social_preference_relative)
+
+#normality - holds
+social_cond %>%
+  group_by(Week) %>%
+  shapiro_test(social_preference_relative)
+
+by(social_cond$social_preference_relative, social_cond$Week, shapiro.test)
+
+#sphericity - similar to the homogeneity of variance in between-group anova)
+#sphericity not broken
+anova_test(data = social_cond, dv = social_preference_relative, wid = ID, within = Week)
+
+#F Indicates that we are comparing to an F-distribution (F-test); (2, 18) indicates the degrees of freedom in the numerator (DFn) and the denominator (DFd), respectively; 55.5 indicates the obtained F-statistic value
+#p specifies the p-value
+#ges is the generalized effect size (amount of variability due to the within-subjects factor)
+```
+
+sociability
+```{r}
+p_load(afex)
+
+social_cond$ID <- as.factor(social_cond$ID)
+
+social_cond$Week <- factor(social_cond$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
+
+aov_anova <- aov_car(social_preference_relative ~ Week+ Error(ID /Week), data=social_cond)
+summary(aov_anova)
+
+#post-hoc
+p_load(emmeans)
+ph<-emmeans(aov_anova, pairwise ~ Week, conf.level = 0.95)
+ph
+confint(ph)  #for confidence intervals
+
+test(ph) # for p values
+
+#bonfferoni
+posthoc_bonf <- emmeans(aov_anova, pairwise ~ Week, adjust = "bonferroni")
+summary(posthoc_bonf)
+
+
+```
+
+```{r}
+p_load(performance)
+check_model(aov_anova)
+```
+Friedman
+
+```{r}
+#friedman.test(y = social_cond$social_preference_relative, groups = social_cond$Week, blocks = social_cond$ID)
+
+#p_load(pgirmess)
+#friedmanmc(as.matrix(dietData))
+
+#res.fried <- friedman_test(social_cond$social_preference_relative ~ social_cond$Week |social_cond$ID)
+
+#pwc <- social_cond %>%
+ # wilcox_test(social_preference_relative ~ Week, paired = TRUE, p.adjust.method = #"bonferroni")
+#pwc
+
+#dunnTest(social_preference_relative ~ Week, data =social_cond,paired = TRUE,
+ #             method="bh")
+
+#pairwise.wilcox.test(ReplicateAverages$positive_N, ReplicateAverages$section,
+ #                p.adjust.method = "BH")
+
+```
+
+
+
+
+plot
+
+```{r}
+#cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(social_cond, aes(x = Week, y = social_preference_relative)) +
+  geom_beeswarm(data = social_cond, size = 2.5, aes(color = ID)) +
+#  geom_dotplot(aes(fill = ID, color = ID), binaxis = 'y', binwidth = 1,
+#               method = "histodot", stackratio = 1, dotsize = 0.5,
+#               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
+ # scale_fill_manual(values = cbbPalette) +
+#  scale_colour_manual(values = cbbPalette) +
+  ylab("social_preference_relative") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.3,
+              annotations = c("ns")) +
+  geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.15,
+              annotations = c("ns")) +
+  geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1,
+              annotations = c("ns")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = social_cond, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+
+```
+
+
+#Repeated measures ANOVA
+
+social novelty
+
+Assumption checks
+
+```{r}
+
+novelty_cond$ID <- as.factor(novelty_cond$ID)
+
+
+p_load(rstatix)
+#outliers - 2
+novelty_cond %>%
+  group_by(Week) %>%
+  identify_outliers(novelty_preference_relative)
+
+#normality - holds
+novelty_cond %>%
+  group_by(Week) %>%
+  shapiro_test(novelty_preference_relative)
+
+by(novelty_cond$novelty_preference_relative, novelty_cond$Week, shapiro.test)
+
+#sphericity - similar to the homogeneity of variance in between-group anova)
+#sphericity not broken
+anova_test(data = novelty_cond, dv = novelty_preference_relative, wid = ID, within = Week)
+
+#F Indicates that we are comparing to an F-distribution (F-test); (2, 18) indicates the degrees of freedom in the numerator (DFn) and the denominator (DFd), respectively; 55.5 indicates the obtained F-statistic valuef
+#p specifies the p-value
+#ges is the generalized effect size (amount of variability due to the within-subjects factor)
+```
+
+```{r}
+
+novelty_cond$ID <- as.factor(novelty_cond$ID)
+
+novelty_cond$Week <- factor(novelty_cond$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
+
+aov_anova <- aov_car(novelty_preference_relative ~ Week+ Error(ID /Week), data=novelty_cond)
+summary(aov_anova)
+
+#post-hoc
+p_load(emmeans)
+ph<-emmeans(aov_anova, pairwise ~ Week, conf.level = 0.95)
+ph
+confint(ph)  #for confidence intervals
+
+test(ph) # for p values
+
+```
+
+```{r}
+p_load(performance)
+check_model(aov_anova)
+```
+
+plot
+
+```{r}
+cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(novelty_cond, aes(x = Week, y = novelty_preference_relative)) +
+  geom_beeswarm(data = novelty_cond, size = 2.5, aes(color = ID)) +
+#  geom_dotplot(aes(fill = ID, color = ID), binaxis = 'y', binwidth = 1,
+#               method = "histodot", stackratio = 1, dotsize = 0.5,
+#               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
+#  scale_fill_manual(values = cbbPalette) +
+#  scale_colour_manual(values = cbbPalette) +
+  ylab("novelty_preference_relative") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.2,
+              annotations = c("ns")) +
+  geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.1,
+              annotations = c("ns")) +
+  geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1,
+              annotations = c("ns")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = novelty_cond, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+
+```
+
+
+
+
+
+
+
+
+
+LMM sociability
+
+```{r}
+#Loading packages for linear mixed effects modelling
+library(lmerTest)
+library(lme4)
+
+social_cond$Week <- factor(social_cond$Week, levels = c("Preinduction","1st week post induction","2nd week post induction"))
+
+#creating a linear model of the same variables as included in the anova
+m_anova <-lmer(social_preference_relative ~  Week + (1|ID), data=social_cond)
+summary(m_anova)
+
+# Obtain estimated marginal means
+emmeans_results <- emmeans(m_anova,pairwise ~ Week, conf.level = 0.95)
+emmeans_results
+
+class(emmeans_results)
+
+emm_single <- emmeans_results[[1]]  # Extract the first emmGrid object
+class(emm_single)
+
+pairwise_results <- contrast(emm_single, method = "pairwise")
+class(pairwise_results)
+
+#pairwise_results <- lapply(emmeans_results, contrast, method = "pairwise")
+
+# Perform pairwise comparisons
+#pairwise_results <- contrast(emmeans_results, method = "pairwise")
+# Display the results
+summary(pairwise_results)
+
+#bonferroni
+#pwc <- pairs(emmeans_results, adjust = "bon")
+#pwc
+
+pwc <- contrast(emm_single, method = "pairwise", adjust = "bon")
+summary(pwc)
+```
+
+plot
+
+```{r}
+cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(social_cond, aes(x = Week, y = social_preference_relative)) +
+  geom_beeswarm(data = social_cond, size = 2.5, aes(color = ID)) +
+  ylab("Social Preference") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.3,
+              annotations = c("0.1279")) +
+  geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.15,
+              annotations = c("0.0028")) +
+  geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1,
+              annotations = c("0.1279")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = social_cond, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+
+```
+
+
+#Repeated measures ANOVA
+
+social novelty
+```{r}
+
+novelty_cond$ID <- as.factor(novelty_cond$ID)
+
+novelty_cond$Week <- factor(novelty_cond$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
+
+aov_anova <- aov_car(novelty_preference_relative ~ Week+ Error(ID /Week), data=novelty_cond)
+summary(aov_anova)
+
+#post-hoc
+p_load(emmeans)
+ph<-emmeans(aov_anova, pairwise ~ Week, conf.level = 0.95)
+ph
+confint(ph)  #for confidence intervals
+
+test(ph) # for p values
+
+```
+
+
+
+
+
+LLM
+
+```{r}
+#Loading packages for linear mixed effects modelling
+library(lmerTest)
+library(lme4)
+
+novelty_cond$Week <- factor(novelty_cond$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
+
+#creating a linear model of the same variables as included in the anova
+m_anova <-lmer(novelty_preference_relative ~  Week + (1|ID), data=novelty_cond)
+summary(m_anova)
+
+# Obtain estimated marginal means
+emmeans_results <- emmeans(m_anova, ~ Week)
+
+# Perform pairwise comparisons
+pairwise_results <- contrast(emmeans_results, method = "pairwise")
+
+# Display the results
+summary(pairwise_results)
+
+#bonferroni
+pwc <- pairs(emmeans_results, adjust = "bon")
+pwc
+```
+
+
+```{r}
+#p_load(performance)
+check_model(m_anova)
+```
+
+plot
+
+```{r}
+cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(novelty_cond, aes(x = Week, y = novelty_preference_relative)) +
+  geom_beeswarm(data = novelty_cond, size = 2.5, aes(color = ID)) +
+  ylab("Novelty Preference") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.3,
+              annotations = c("0.7316")) +
+  geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1.15,
+              annotations = c("0.0679")) +
+  geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 1,
+              annotations = c("0.5534")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = novelty_cond, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+
+```
+
+
+
+# T-test
+
+Data set where participants not completing all data collection time points are sorted out
+```{r}
+# Filter out so data is only for the first two weeks
+TwoWeeks_df <- df %>% filter(Week == "Preinduction" | Week == "1st week post induction")
+
+```
+
+#Filter out subjects that did not complete
+```{r}
+
+# Determine the weeks each participant should have
+required_weeks <- TwoWeeks_df %>% 
+  distinct(Week) %>% 
+  pull()
+
+# Count the number of weeks each participant has data for
+participant_week_counts <- TwoWeeks_df %>%
+  group_by(ID) %>%
+  summarize(week_count = n_distinct(Week))
+
+# Identify participants with data for all required weeks
+complete_participants <- participant_week_counts %>%
+  filter(week_count == length(required_weeks)) %>%
+  pull(ID)
+
+# Filter the dataset to include only complete participants
+df_complete <- TwoWeeks_df %>%
+  filter(ID %in% complete_participants)
+
+# View the new dataset
+head(df_complete)
+```
+
+```{r}
+df_complete$ID <- as.factor(df_complete$ID)
+df_complete$Week <- factor(df_complete$Week , levels = c("Preinduction","1st week post induction"))
+
+```
+
+
+
+Divide dataset up into Habituation, social, and novelty phases
+
+```{r}
+habituation_cond <-  df_complete %>% filter(Condition == "Hab")
+social_cond<-  df_complete %>% filter(Condition == "Social")
+novelty_cond<-  df_complete %>% filter(Condition == "Novel")
+
+```
+
+
+```{r}
+
+habituation_cond <- habituation_cond %>% mutate(social_preference_relative=((`In zone SocialZone cumulative s`-`In zone NoveltyZone cumulative s`)/(`In zone NoveltyZone cumulative s`+`In zone SocialZone cumulative s`)))
+
+
+#As described in Baronio 2015 
+#https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0116363&type=printable 
+
+social_cond <- social_cond %>% mutate(social_preference_relative=((`In zone SocialZone cumulative s`-`In zone NoveltyZone cumulative s`)/(`In zone NoveltyZone cumulative s`+`In zone SocialZone cumulative s`)))
+
+novelty_cond <- novelty_cond %>% mutate(novelty_preference_relative=((`In zone NoveltyZone cumulative s`-`In zone SocialZone cumulative s`)/(`In zone SocialZone cumulative s`+`In zone NoveltyZone cumulative s`)))
+
+```
+
+## Social preference 
+```{r}
+
+by(social_cond$social_preference_relative, social_cond$Week, shapiro.test)
+
+# Perform paired t-test
+t_test_result <- t.test(social_preference_relative ~ Week, data = social_cond, paired = TRUE)
+
+# Print the result of the t-test
+print(t_test_result)
+
+# Extract the p-value from the test result
+p_value <- t_test_result$p.value
+```
+
+```{r}
+# Function to convert p-value to significance annotations
+get_significance_label <- function(p_value) {
+  if (p_value < 0.001) {
+    return("***")
+  } else if (p_value < 0.01) {
+    return("**")
+  } else if (p_value < 0.05) {
+    return("*")
+  } else {
+    return("ns")
+  }
+}
+```
+
+
+```{r}
+p_load(ggbeeswarm, ggsignif)
+# Get the significance label for the paired t-test p-value
+significance_label <- get_significance_label(p_value)
+
+ggplot(social_cond, aes(x = Week, y = social_preference_relative)) +
+  geom_beeswarm(data = social_cond, size = 2.5, aes(color = ID)) +
+  ylab("social preference") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              annotations = significance_label) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = social_cond, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+```
+
+
+## novelty preference 
+```{r}
+
+by(novelty_cond$novelty_preference_relative, novelty_cond$Week, shapiro.test)
+
+# Perform paired t-test
+t_test_result <- t.test(novelty_preference_relative ~ Week, data = novelty_cond, paired = TRUE)
+
+# Print the result of the t-test
+print(t_test_result)
+
+# Extract the p-value from the test result
+p_value <- t_test_result$p.value
+```
+
+```{r}
+p_load(ggbeeswarm, ggsignif)
+# Get the significance label for the paired t-test p-value
+significance_label <- get_significance_label(p_value)
+
+ggplot(novelty_cond, aes(x = Week, y = novelty_preference_relative)) +
+  geom_beeswarm(data = novelty_cond, size = 2.5, aes(color = ID)) +
+  ylab("Novelty preference") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              annotations = significance_label) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = novelty_cond, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+```

@@ -1,0 +1,174 @@
+---
+title: "OFT"
+output:
+  pdf_document: default
+  html_document: default
+date: '2022-12-05'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Load data
+```{r}
+
+# Loading
+library(pacman)
+p_load(readxl, tidyverse)
+p_load(broom, ggsignif, multcomp, emmeans, DescTools)
+pacman::p_load(readxl)
+# xlsx files
+df <- read_excel("LDCT_longitudinal 2 weeks.xlsx")
+
+```
+
+Removal of mouse 224, 281, 262 from dataset as it turned they were not double transgenic
+```{r}
+df<-df[!(df$ID==224),] 
+df<-df[!(df$ID==281),] 
+df<-df[!(df$ID==262),] 
+
+
+```
+
+
+
+Time spent in dark chamber:
+```{r}
+#light preference
+df<-  df %>% mutate(time_light=df$`In zone light cumulative s`)
+df<-  df %>% mutate(time_dark=600-df$`In zone light cumulative s`)
+
+#relative time spent in dark over light
+df<-  df %>% mutate(light_preference=(time_light/(time_light+time_dark))*100)
+df<-  df %>% mutate(dark_preference=(time_dark/(time_light+time_dark))*100)
+
+```
+
+```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+
+
+# Group by 'Week' and calculate mean and standard deviation
+summary_stats <- df %>%
+  group_by(Week) %>%
+  summarise(
+    mean_variable = mean(light_preference, na.rm = TRUE),
+    sd_variable = sd(light_preference, na.rm = TRUE)
+  )
+
+# Print results
+print(summary_stats)
+
+```
+
+```{r}
+library(lmerTest)
+library(dplyr)
+library(tidyr)
+library(future.apply)
+
+# Function to generate simulated data for only two weeks
+generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
+  set.seed(seed)
+  offset <- rnorm(n_mice, 0, 5)
+
+  pre_mean  <- 37.70308	
+  pre_sd    <- 11.59718		
+  week1_mean <- 44.57194
+  week1_sd   <- 10.80062	
+
+  if (!effect) {
+    week1_mean <- pre_mean
+  }
+
+  df <- data.frame(
+    id = 1:n_mice,
+    week_preinduction = rnorm(n_mice, pre_mean, pre_sd) + offset,
+    week_post1 = rnorm(n_mice, week1_mean, week1_sd) + offset
+  )
+  
+  # Simulate 1 random dropout in week_post1
+  drop_out <- sample(1:n_mice, 1)
+  df$week_post1[drop_out] <- NA
+
+  return(df)
+}
+
+n_simulations <- 1000
+plan(multisession, workers = max(1, parallel::detectCores() - 2))
+
+# Simulation loop
+results <- future_lapply(1:n_simulations, function(i) {
+  df_effect <- generate_mouse_data(seed = i, effect = TRUE) %>%
+    pivot_longer(starts_with("week"), names_to = "week_number", values_to = "distance")
+  df_null <- generate_mouse_data(seed = i + 1, effect = FALSE) %>%
+    pivot_longer(starts_with("week"), names_to = "week_number", values_to = "distance")
+
+  df_effect$week_number <- factor(df_effect$week_number, levels = c("week_preinduction", "week_post1"))
+  df_null$week_number <- factor(df_null$week_number, levels = c("week_preinduction", "week_post1"))
+
+  m_effect <- tryCatch(
+    lmer(distance ~ week_number + (1 | id), data = df_effect),
+    error = function(e) NULL
+  )
+  m_null <- tryCatch(
+    lmer(distance ~ week_number + (1 | id), data = df_null),
+    error = function(e) NULL
+  )
+
+  get_pvals <- function(model) {
+    if (is.null(model)) return(NA)
+    p <- summary(model)$coefficients[, "Pr(>|t|)"]
+    return(p["week_numberweek_post1"])
+  }
+
+  list(
+    p_effect = get_pvals(m_effect),
+    p_null = get_pvals(m_null),
+    singular_effect = if (!is.null(m_effect)) isSingular(m_effect) else NA,
+    singular_null = if (!is.null(m_null)) isSingular(m_null) else NA
+  )
+}, future.seed = TRUE)
+
+# Organize and summarize results
+p_values_df <- data.frame(
+  predictor = "week_post1",
+  p_effect = sapply(results, function(x) x$p_effect),
+  p_null = sapply(results, function(x) x$p_null)
+) %>%
+  mutate(
+    significant_effect = p_effect < 0.05,
+    significant_null = p_null < 0.05
+  )
+
+p_values_summary <- p_values_df %>%
+  group_by(predictor) %>%
+  summarise(
+    significant_effect = mean(significant_effect, na.rm = TRUE) * 100,
+    significant_null = mean(significant_null, na.rm = TRUE) * 100,
+    .groups = "drop"
+  )
+
+# Summarise singularity
+singular_summary <- data.frame(
+  singular_effect = sapply(results, function(x) x$singular_effect),
+  singular_null = sapply(results, function(x) x$singular_null)
+)
+
+singular_table_effect <- table(singular_summary$singular_effect, useNA = "ifany")
+singular_table_null <- table(singular_summary$singular_null, useNA = "ifany")
+
+# Print results
+print(p_values_summary)
+cat("\nSingular Fit Summary (Effect Model):\n")
+print(singular_table_effect)
+cat("\nSingular Fit Summary (Null Model):\n")
+print(singular_table_null)
+
+
+```

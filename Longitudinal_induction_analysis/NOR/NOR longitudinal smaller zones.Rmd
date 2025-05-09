@@ -18,10 +18,21 @@ library(pacman)
 p_load(readxl, tidyverse)
 p_load(broom, ggsignif, multcomp, emmeans, DescTools)
 # xlsx files
-df <- read_excel("NOR_smaller_zone_multicond_longitudinal_data.xlsx")
+#df <- read_excel("NOR_smaller_zone_multicond_longitudinal_data.xlsx") #smaller zones (1cm)
+
+df <- read_excel("NOR_20250225_2cm_zones.xlsx")
 
 ```
 
+
+
+Removal of mouse 224 from dataset it turned it it was not double transgenic
+```{r}
+df<-df[!(df$ID==224),] 
+df<-df[!(df$ID==281),] 
+df<-df[!(df$ID==262),] 
+
+```
 
 
 
@@ -69,12 +80,12 @@ https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3332351/
 In Wang et al.’s research (2007), they applied a measure of cognitive function through the Preference Index. This is a ratio of the amount of time spent exploring any one of the two objects in training phase (A or B) or the novel one in test phase (C) over the total time spent exploring both objects, i.e., A or B/(B + A) * 100 (%) in the training session and B or C/(B + C) * 100 (%) in the test phase. Therefore, a preference index above 50% indicates novel object preference, below 50% familiar object preference, and 50% no preference (Hammond et al. 2004).
 
 ```{r}
-Novel_left <-  df_complete %>% filter(Condition =="NovLFT")
-Novel_right<-  df_complete %>% filter(Condition == "NovRGHT")
+#Novel_left <-  df_complete %>% filter(Condition =="NovLFT")
+#Novel_right<-  df_complete %>% filter(Condition == "NovRGHT")
 
 #use this for full sample in df2 instead, for LMM approach
-#Novel_left <-  df %>% filter(Condition =="NovLFT")
-#Novel_right<-  df %>% filter(Condition == "NovRGHT")
+Novel_left <-  df %>% filter(Condition =="NovLFT")
+Novel_right<-  df %>% filter(Condition == "NovRGHT")
 
 
 # calculating DR_ index as (time novel  / (time novel + time familiar)*100)
@@ -111,7 +122,7 @@ test(ph) # for p values
 
 ```
 ```{r}
-#p_load(performance)
+p_load(performance)
 check_model(aov_anova)
 ```
 
@@ -125,12 +136,7 @@ p_load(ggbeeswarm, ggsignif)
 
 ggplot(df2, aes(x = Week, y = DR_index)) +
   geom_beeswarm(data = df2, size = 2.5, aes(color = ID)) +
-#  geom_dotplot(aes(fill = ID, color = ID), binaxis = 'y', binwidth = 1,
-#               method = "histodot", stackratio = 1, dotsize = 0.5,
-#               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
-#  scale_fill_manual(values = cbbPalette) +
-#  scale_colour_manual(values = cbbPalette) +
-  ylab("DR_index") +
+  ylab("Recognition index %") +
   xlab("Timepoint") +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
@@ -151,7 +157,7 @@ ggplot(df2, aes(x = Week, y = DR_index)) +
 
 ```
 
-
+#LMM
 
 ```{r}
 #Loading packages for linear mixed effects modelling
@@ -175,6 +181,36 @@ summary(pairwise_results)
 pwc <- pairs(emmeans_results, adjust = "bon")
 pwc
 ```
+
+```{r}
+
+cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(df2, aes(x = Week, y = DR_index)) +
+  geom_beeswarm(data = df2, size = 2.5, aes(color = ID)) +
+  ylab("Recognition index %") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 120,
+              annotations = c("0.2272")) +
+  geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 110,
+              annotations = c("1.0000")) +
+  geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 100,
+              annotations = c("0.1493")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = df2, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+
+
+```
+
 ```{r}
 #p_load(performance)
 check_model(m_anova)
@@ -219,7 +255,7 @@ qqline(ranef(m_anova)$ID[,1])
 #The relationship between the predictor variables and the response variable should be linear. This can be assessed by plotting the fitted values against the predictor variables.
 
 # Plot fitted values vs predictors
-plot(df$Week, fitted(m_anova))
+#plot(df$Week, fitted(m_anova))
 
 
 ```

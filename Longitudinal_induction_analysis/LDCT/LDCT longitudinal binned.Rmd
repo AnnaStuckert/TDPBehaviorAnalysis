@@ -19,6 +19,7 @@ p_load(readxl, tidyverse)
 p_load(broom, ggsignif, multcomp, emmeans)
 # xlsx files
 df <- read_excel("LDCT_longitudinal_binned.xlsx")
+#df <- read_excel("LDCT_longitudinal_binned_2weeks.xlsx")
 
 ```
 
@@ -31,6 +32,7 @@ df<-  df %>% mutate(time_dark=600-df$`In zone light cumulative s`)
 
 #relative time spent in dark over light
 df<-  df %>% mutate(light_preference=(time_light/(time_light+time_dark))*100)
+df<-  df %>% mutate(dark_preference=(time_dark/(time_light+time_dark))*100)
 ```
 
 Data set where participants not completing all data collection time points are sorted out
@@ -60,11 +62,26 @@ head(df_complete)
 ```
 
 
+#light time model
 ```{r}
 df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
-
+p_load(lme4)
 
 model <- lmer(light_preference ~ Week*Timebin + (1 | ID), data = df)
+#Compare First vs. Last 5 Minutes within Each Week
+emmeans(model, pairwise ~ Timebin | Week, adjust = "bonferroni")
+
+#Compare Distance Moved Across Weeks for Each Trial Period
+emmeans(model, pairwise ~ Week | Timebin, adjust = "bonferroni")
+
+#plot(emmeans(model, ~ Week * Timebin))
+```
+# dark time model
+```{r}
+df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
+p_load(lme4)
+
+model <- lmer(dark_preference ~ Week*Timebin + (1 | ID), data = df)
 #Compare First vs. Last 5 Minutes within Each Week
 emmeans(model, pairwise ~ Timebin | Week, adjust = "bonferroni")
 
@@ -77,10 +94,10 @@ emmeans(model, pairwise ~ Week | Timebin, adjust = "bonferroni")
 Check assumptions
 
 ```{r}
-#p_load(performance)
+p_load(performance)
 check_model(model)
 ```
-
+plot light time
 
 ```{r}
 # Ensure 'Week' and 'timebin' are factors with appropriate levels
@@ -98,17 +115,17 @@ ggplot(df, aes(x = interaction(Week, Timebin), y = light_preference)) +
   ylab("Light preference") +
   xlab("Timepoint") +
   
-  # Add significance comparisons
-  geom_signif(comparisons = list(c("Preinduction.Timebin 1", "1st week post induction.Timebin 1")),
-              map_signif_level = TRUE,
-              y_position = 40,
-              annotations = c("0.0164")) +
-
-  
-    geom_signif(comparisons = list(c("Preinduction.Timebin 2", "1st week post induction.Timebin 2")),
-              map_signif_level = TRUE,
-              y_position = 40,
-              annotations = c("0.0906")) +
+  # # Add significance comparisons
+  # geom_signif(comparisons = list(c("Preinduction.Timebin 1", "1st week post induction.Timebin 1")),
+  #             map_signif_level = TRUE,
+  #             y_position = 40,
+  #             annotations = c("0.0164")) +
+  # 
+  # 
+  #   geom_signif(comparisons = list(c("Preinduction.Timebin 2", "1st week post induction.Timebin 2")),
+  #             map_signif_level = TRUE,
+  #             y_position = 40,
+  #             annotations = c("0.0331")) +
 
 
   # Add mean and error bars
@@ -121,6 +138,60 @@ ggplot(df, aes(x = interaction(Week, Timebin), y = light_preference)) +
   ylim(0, 55)
 ```
 
+plot dark time 
+
+```{r}
+# Ensure 'Week' and 'timebin' are factors with appropriate levels
+
+df$Timebin <- as.factor(df$Timebin)
+class(df$Timebin)
+#df$Timebin <- factor(df$Timebin, levels = c("Timebin 1", "Timebin 2"))
+
+# Load required packages
+p_load(ggbeeswarm, ggsignif)
+
+# Create the plot
+ggplot(df, aes(x = interaction(Week, Timebin), y = dark_preference)) +
+  geom_beeswarm(size = 2.5, aes(color = ID)) +
+  ylab("Darkness preference") +
+  xlab("Timepoint") +
+  
+  # Add significance comparisons
+  geom_signif(comparisons = list(c("Preinduction.Timebin 1", "1st week post induction.Timebin 1")),
+              map_signif_level = TRUE,
+              y_position = 110,
+              annotations = c("0.0876")) +
+  geom_signif(comparisons = list(c("Preinduction.Timebin 1", "2nd week post induction.Timebin 1")),
+              map_signif_level = TRUE,
+              y_position = 115,
+              annotations = c("0.6816")) +
+  geom_signif(comparisons = list(c("1st week post induction.Timebin 1", "2nd week post induction.Timebin 1")),
+              map_signif_level = TRUE,
+              y_position = 120,
+              annotations = c("1.0000")) +
+  
+    geom_signif(comparisons = list(c("Preinduction.Timebin 2", "1st week post induction.Timebin 2")),
+              map_signif_level = TRUE,
+              y_position = 110,
+              annotations = c("1.0000")) +
+  geom_signif(comparisons = list(c("Preinduction.Timebin 2", "2nd week post induction.Timebin 2")),
+              map_signif_level = TRUE,
+              y_position = 115,
+              annotations = c("0.1629")) +
+  geom_signif(comparisons = list(c("1st week post induction.Timebin 2", "2nd week post induction.Timebin 2")),
+              map_signif_level = TRUE,
+              y_position = 120,
+              annotations = c("0.3872")) +
+
+  # Add mean and error bars
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.1, position = position_dodge(width = 0.75)) +
+  
+  # Improve theme
+  theme(text = element_text(size = 13),
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+#light phase analysis
 ```{r}
 # Ensure 'Week' and 'Timebin' are factors
 df$Week <- factor(df$Week, levels = c("Preinduction", "1st week post induction", "2nd week post induction"))
@@ -143,7 +214,7 @@ ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = light_preference))
   geom_signif(comparisons = list(c("Timebin 1 1st week post induction", "Timebin 2 1st week post induction")),
               map_signif_level = TRUE,
               y_position = 40,
-              annotations = c("0.7341")) +
+              annotations = c("0.0906")) +
   
   # Add mean and error bars
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5, position = position_dodge(width = 0.75)) +
@@ -153,4 +224,43 @@ ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = light_preference))
   theme(text = element_text(size = 13),
         axis.text.x = element_text(angle = 45, hjust = 1)) +
     ylim(0, 55)
+```
+
+#dark time
+
+
+```{r}
+# Ensure 'Week' and 'Timebin' are factors
+df$Week <- factor(df$Week, levels = c("Preinduction", "1st week post induction", "2nd week post induction"))
+df$Timebin <- factor(df$Timebin, levels = c("Timebin 1", "Timebin 2"))
+
+# Load required packages
+p_load(ggbeeswarm, ggsignif)
+
+# Create the plot
+ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = dark_preference)) +
+  geom_beeswarm(size = 2.5, aes(color = ID)) +
+  ylab("Darkness preference") +
+  xlab("Timepoint") +
+ # Add significance comparisons
+  geom_signif(comparisons = list(c("Timebin 1 Preinduction", "Timebin 2 Preinduction")),
+              map_signif_level = TRUE,
+              y_position = 100,
+              annotations = c("0.6603")) +
+  geom_signif(comparisons = list(c("Timebin 1 1st week post induction", "Timebin 2 1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 105,
+              annotations = c("0.2703")) +
+  geom_signif(comparisons = list(c("Timebin 1 2nd week post induction", "Timebin 2 2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 110,
+              annotations = c("0.4033")) +
+  
+  # Add mean and error bars
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5, position = position_dodge(width = 0.75)) +
+  geom_errorbar(stat = "summary", fun.data = mean_se, width = 0.1, position = position_dodge(width = 0.75)) +
+  
+  # Improve theme
+  theme(text = element_text(size = 13),
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
 ```

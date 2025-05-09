@@ -214,18 +214,18 @@ library(lme4)
 
 ```{r}
 
-library(simr)
-
-effect_size <- 0.3  
-alpha <- 0.05     
-power <- 0.80       
-
-design <- lme4::lmer(distance ~ Week + (1 | ID), data = df)
-
-# Calculate power
-power_analysis <- powerSim(design, nsim = 1000)
-power_analysis
-
+# library(simr)
+# 
+# effect_size <- 0.3  
+# alpha <- 0.05     
+# power <- 0.80       
+# 
+# design <- lme4::lmer(distance ~ Week + (1 | ID), data = df)
+# 
+# # Calculate power
+# power_analysis <- powerSim(design, nsim = 1000)
+# power_analysis
+# 
 
 
 ```

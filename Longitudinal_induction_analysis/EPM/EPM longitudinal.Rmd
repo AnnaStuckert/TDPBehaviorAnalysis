@@ -12,12 +12,22 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 Load data
 ```{r}
-#setwd("~/Documents/TDP control files/Longitudinal induction analysis/EPM/")
 # Loading
 library(pacman)
 p_load(readxl, tidyverse)
 # xlsx files
 df <- read_excel("EPM_longitudinal_data.xlsx")
+
+
+```
+
+
+
+Removal of mouse 224 from dataset it turned it it was not double transgenic
+```{r}
+df<-df[!(df$ID==224),] 
+df<-df[!(df$ID==281),] 
+df<-df[!(df$ID==262),] 
 
 
 ```
@@ -29,9 +39,10 @@ Time spent in dark chamber:
  df<-  df %>% mutate(time_dark=df$`In zone Closed_arm1 cumulative`+df$`In zone Closed_arm2 cumulative`)
  df<-  df %>% mutate(time_light=df$`In zone Open_arm1 cumulative`+df$`In zone Open_arm2 cumaltive`)
 # 
-# #relative time spent in dark over light
+# #relative time spent in light over dark
  df<-  df %>% mutate(light_preference=time_light/(time_light+time_dark)*100) 
-
+#relative time spent in dark over light
+df<-  df %>% mutate(dark_preference=time_dark/(time_light+time_dark)*100) 
 
 ```
 
@@ -43,6 +54,8 @@ df<-  df %>% mutate(freq_light=df$`In zone Open_arm1 frequency`+df$`In zone Open
 
 #relative time spent in dark over light as entries in open arm / total arm entries
 df<-  df %>% mutate(light_preference_freq=freq_light/(freq_light+freq_dark)*100) 
+
+df<-  df %>% mutate(dark_preference_freq=freq_dark/(freq_light+freq_dark)*100) 
 
 ```
 
@@ -74,15 +87,13 @@ head(df_complete)
 ```
 #Repeated measures ANOVA
 
-light preference freq
+dark preference freq
 ```{r}
 
 df_complete$ID <- as.factor(df_complete$ID)
 
-df_complete$Week <- factor(df_complete$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
-
 p_load(afex)
-aov_anova <- aov_car(light_preference_freq ~ Week+ Error(ID /Week), data=df_complete)
+aov_anova <- aov_car(dark_preference_freq ~ Week+ Error(ID /Week), data=df_complete)
 summary(aov_anova)
 
 #post-hoc
@@ -101,15 +112,16 @@ plot
 cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
 
 p_load(ggbeeswarm, ggsignif)
+df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
 
-ggplot(df_complete, aes(x = Week, y = light_preference_freq)) +
-  geom_beeswarm(data = df_complete, size = 2.5, aes(color = ID)) +
+ggplot(df, aes(x = Week, y = dark_preference_freq)) +
+  geom_beeswarm(data = df, size = 2.5, aes(color = ID)) +
 #  geom_dotplot(aes(fill = ID, color = ID), binaxis = 'y', binwidth = 1,
 #               method = "histodot", stackratio = 1, dotsize = 0.5,
 #               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
 #  scale_fill_manual(values = cbbPalette) +
 #  scale_colour_manual(values = cbbPalette) +
-  ylab("light_preference_freq") +
+  ylab("dark_preference_freq") +
   xlab("Timepoint") +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
@@ -178,7 +190,21 @@ test(ph) # for p values
 ```
 
 
+dark preference time
+```{r}
 
+aov_anova <- aov_car(dark_preference ~ Week+ Error(ID /Week), data=df_complete)
+summary(aov_anova)
+
+#post-hoc
+p_load(emmeans)
+ph<-emmeans(aov_anova, pairwise ~ Week, conf.level = 0.95)
+ph
+confint(ph)  #for confidence intervals
+
+test(ph) # for p values
+
+```
 
 plot
 
@@ -217,6 +243,7 @@ ggplot(df_complete, aes(x = Week, y = light_preference)) +
 
 LMM
 
+#light preference
 ```{r}
 #Loading packages for linear mixed effects modelling
 library(lmerTest)
@@ -240,12 +267,37 @@ pwc <- pairs(emmeans_results, adjust = "bon")
 pwc
 ```
 
-plot
 
+#dark preference
+```{r}
+#Loading packages for linear mixed effects modelling
+library(lmerTest)
+library(lme4)
+
+#creating a linear model of the same variables as included in the anova
+m_anova <-lmer(dark_preference ~  Week + (1|ID), data=df)
+summary(m_anova)
+
+# Obtain estimated marginal means
+emmeans_results <- emmeans(m_anova, ~ Week)
+
+# Perform pairwise comparisons
+pairwise_results <- contrast(emmeans_results, method = "pairwise")
+
+# Display the results
+summary(pairwise_results)
+
+#bonferroni
+pwc <- pairs(emmeans_results, adjust = "bon")
+pwc
+```
+plot
+#light preference
 ```{r}
 cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
 
 p_load(ggbeeswarm, ggsignif)
+df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
 
 ggplot(df, aes(x = Week, y = light_preference)) +
   geom_beeswarm(data = df, size = 2.5, aes(color = ID)) +
@@ -259,15 +311,44 @@ ggplot(df, aes(x = Week, y = light_preference)) +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
               y_position = 40,
-              annotations = c("ns")) +
+              annotations = c("0.4469")) +
   geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
               map_signif_level = TRUE,
               y_position = 35,
-              annotations = c("ns")) +
+              annotations = c("0.0389")) +
   geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
               map_signif_level = TRUE,
               y_position = 30,
-              annotations = c("ns")) +
+              annotations = c("0.0015")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = df, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13))
+
+```
+
+
+#dark preference
+```{r}
+cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(df, aes(x = Week, y = dark_preference)) +
+  geom_beeswarm(data = df, size = 2.5, aes(color = ID)) +
+  ylab("Darkness preference") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 110,
+              annotations = c("0.4469")) +
+  geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 115,
+              annotations = c("0.0389")) +
+  geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 120,
+              annotations = c("0.0015")) +
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
   geom_errorbar(data = df, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
   theme(text = element_text(size = 13))

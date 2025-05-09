@@ -18,7 +18,17 @@ library(pacman)
 p_load(readxl, tidyverse)
 p_load(broom, ggsignif, multcomp, emmeans)
 # xlsx files
-df <- read_excel("LDCT_longitudinal.xlsx")
+df <- read_excel("LDCT_longitudinal 2 weeks.xlsx")
+
+```
+
+
+Removal of mouse 224 from dataset it turned it it was not double transgenic
+```{r}
+df<-df[!(df$ID==224),] 
+df<-df[!(df$ID==281),] 
+df<-df[!(df$ID==262),] 
+
 
 ```
 
@@ -31,6 +41,7 @@ df<-  df %>% mutate(time_dark=600-df$`In zone light cumulative s`)
 
 #relative time spent in dark over light
 df<-  df %>% mutate(light_preference=(time_light/(time_light+time_dark))*100)
+df<-  df %>% mutate(dark_preference=(time_dark/(time_light+time_dark))*100)
 ```
 
 Data set where participants not completing all data collection time points are sorted out
@@ -69,7 +80,7 @@ df_complete %>%
   group_by(Week) %>%
   identify_outliers(light_preference)
 
-by(df_complete$light_preference, df_complete$Week, shapiro.test)
+by(df_complete$dark_preference, df_complete$Week, shapiro.test)
 
 
 # Subset data for the two conditions
@@ -77,7 +88,7 @@ preinduction <- df_complete %>% filter(Week == "Preinduction")
 postinduction <- df_complete %>% filter(Week == "1st week post induction")
 
 # Perform paired t-test
-t_test_result <- t.test(preinduction$light_preference, postinduction$light_preference, paired = TRUE)
+t_test_result <- t.test(preinduction$dark_preference, postinduction$dark_preference, paired = TRUE)
 print(t_test_result)
 ```
 
@@ -92,14 +103,14 @@ cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76"
 
 p_load(ggbeeswarm, ggsignif)
 
-ggplot(df_complete, aes(x = Week, y = light_preference)) +
+ggplot(df_complete, aes(x = Week, y = dark_preference)) +
   geom_beeswarm(data = df_complete, size = 2.5, aes(color = ID)) +
 #  geom_dotplot(aes(fill = ID, color = ID), binaxis = 'y', binwidth = 1,
 #               method = "histodot", stackratio = 1, dotsize = 0.5,
 #               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
 #  scale_fill_manual(values = cbbPalette) +
 #  scale_colour_manual(values = cbbPalette) +
-  ylab("light_preference") +
+  ylab("dark_preference") +
   xlab("Timepoint") +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
@@ -155,12 +166,46 @@ ggplot(df, aes(x = Week, y = light_preference)) +
 #               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
 #  scale_fill_manual(values = cbbPalette) +
 #  scale_colour_manual(values = cbbPalette) +
-  ylab("light_preference") +
+  ylab("dark_preference") +
   xlab("Timepoint") +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
-              y_position = 60,
-              annotations = c("***")) +
+              y_position = 80,
+              annotations = c("0.0985")) +
+  geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
+  geom_errorbar(data = df, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
+  theme(text = element_text(size = 13)) +
+  ylab("Light preference") 
+
+```
+
+all weeks
+```{r}
+cbbPalette <- c("#fcfdbf", "#feca8d", "#D67236", "#f1605d", "#9e2f7f", "#440f76")
+
+p_load(ggbeeswarm, ggsignif)
+
+ggplot(df, aes(x = Week, y = dark_preference)) +
+  geom_beeswarm(data = df, size = 2.5, aes(color = ID)) +
+#  geom_dotplot(aes(fill = ID, color = ID), binaxis = 'y', binwidth = 1,
+#               method = "histodot", stackratio = 1, dotsize = 0.5,
+#               stackgroups = TRUE, stackdir = "down", position = position_nudge(x = -.1)) +
+#  scale_fill_manual(values = cbbPalette) +
+#  scale_colour_manual(values = cbbPalette) +
+  ylab("dark_preference") +
+  xlab("Timepoint") +
+  geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
+              map_signif_level = TRUE,
+              y_position = 80,
+              annotations = c("0.4365")) +
+   geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 90,
+              annotations = c("0.2976")) +
+   geom_signif(comparisons = list(c("1st week post induction", "2nd week post induction")),
+              map_signif_level = TRUE,
+              y_position = 100,
+              annotations = c("1.0000")) +
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
   geom_errorbar(data = df, stat = "summary", fun.data = mean_se, width = 0.1, position = "dodge") +
   theme(text = element_text(size = 13))

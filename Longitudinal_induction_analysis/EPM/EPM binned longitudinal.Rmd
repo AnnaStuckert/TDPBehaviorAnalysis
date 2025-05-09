@@ -29,10 +29,10 @@ Time spent in dark chamber:
  df<-  df %>% mutate(time_dark=df$`In zone Closed_arm1 cumulative`+df$`In zone Closed_arm2 cumulative`)
  df<-  df %>% mutate(time_light=df$`In zone Open_arm1 cumulative`+df$`In zone Open_arm2 cumaltive`)
 # 
-# #relative time spent in dark over light
+# #relative time spent in light over dark
  df<-  df %>% mutate(light_preference=time_light/(time_light+time_dark)*100) 
-
-
+ #relative time spent in dark over light
+ df<-  df %>% mutate(dark_preference=time_dark/(time_light+time_dark)*100) 
 ```
 
 Frequency in arms
@@ -72,12 +72,12 @@ df_complete <- df %>%
 # View the new dataset
 head(df_complete)
 ```
-
+# light pref
 ```{r}
 
 df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
 
-
+p_load(lme4)
 model <- lmer(light_preference ~ Week*Timebin + (1 | ID), data = df)
 #Compare First vs. Last 5 Minutes within Each Week
 emmeans(model, pairwise ~ Timebin | Week, adjust = "bonferroni")
@@ -88,11 +88,25 @@ emmeans(model, pairwise ~ Week | Timebin, adjust = "bonferroni")
 #plot(emmeans(model, ~ Week * Timebin))
 
 ```
-
+#dark pref
 ```{r}
-#p_load(performance)
-check_model(model)
+
+df$Week <- factor(df$Week , levels = c("Preinduction","1st week post induction","2nd week post induction"))
+
+p_load(lme4)
+model <- lmer(dark_preference ~ Week*Timebin + (1 | ID), data = df)
+#Compare First vs. Last 5 Minutes within Each Week
+emmeans(model, pairwise ~ Timebin | Week, adjust = "bonferroni")
+
+#Compare Distance Moved Across Weeks for Each Trial Period
+emmeans(model, pairwise ~ Week | Timebin, adjust = "bonferroni")
+
+#plot(emmeans(model, ~ Week * Timebin))
+
 ```
+
+
+#dark pref
 
 ```{r}
 # Ensure 'Week' and 'timebin' are factors with appropriate levels
@@ -105,37 +119,37 @@ class(df$Timebin)
 p_load(ggbeeswarm, ggsignif)
 
 # Create the plot
-ggplot(df, aes(x = interaction(Week, Timebin), y = light_preference)) +
+ggplot(df, aes(x = interaction(Week, Timebin), y = dark_preference)) +
   geom_beeswarm(size = 2.5, aes(color = ID)) +
-  ylab("Light preference") +
+  ylab("Darkness preference") +
   xlab("Timepoint") +
   
   # Add significance comparisons
   geom_signif(comparisons = list(c("Preinduction.Timebin 1", "1st week post induction.Timebin 1")),
               map_signif_level = TRUE,
-              y_position = 30,
-              annotations = c("0.0146")) +
+              y_position = 110,
+              annotations = c("0.0152")) +
   geom_signif(comparisons = list(c("Preinduction.Timebin 1", "2nd week post induction.Timebin 1")),
               map_signif_level = TRUE,
-              y_position = 40,
-              annotations = c("0.4282")) +
+              y_position = 115,
+              annotations = c(" 1.0000")) +
   geom_signif(comparisons = list(c("1st week post induction.Timebin 1", "2nd week post induction.Timebin 1")),
               map_signif_level = TRUE,
-              y_position = 50,
-              annotations = c("0.7723")) +
+              y_position = 120,
+              annotations = c("0.0063")) +
   
     geom_signif(comparisons = list(c("Preinduction.Timebin 2", "1st week post induction.Timebin 2")),
               map_signif_level = TRUE,
-              y_position = 30,
+              y_position = 110,
               annotations = c("1.0000")) +
   geom_signif(comparisons = list(c("Preinduction.Timebin 2", "2nd week post induction.Timebin 2")),
               map_signif_level = TRUE,
-              y_position = 40,
-              annotations = c("0.0655")) +
+              y_position = 115,
+              annotations = c("0.0198")) +
   geom_signif(comparisons = list(c("1st week post induction.Timebin 2", "2nd week post induction.Timebin 2")),
               map_signif_level = TRUE,
-              y_position = 50,
-              annotations = c("0.0318")) +
+              y_position = 120,
+              annotations = c(" 0.0058")) +
 
   # Add mean and error bars
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5) +
@@ -143,10 +157,10 @@ ggplot(df, aes(x = interaction(Week, Timebin), y = light_preference)) +
   
   # Improve theme
   theme(text = element_text(size = 13),
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
-  ylim(0, 55)
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
 ```
 
+#dark preference
 
 ```{r}
 # Ensure 'Week' and 'Timebin' are factors
@@ -157,24 +171,24 @@ df$Timebin <- factor(df$Timebin, levels = c("Timebin 1", "Timebin 2"))
 p_load(ggbeeswarm, ggsignif)
 
 # Create the plot
-ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = light_preference)) +
+ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = dark_preference)) +
   geom_beeswarm(size = 2.5, aes(color = ID)) +
-  ylab("Light preference") +
+  ylab("Darkness preference") +
   xlab("Timepoint") +
   
   # Add significance comparisons
   geom_signif(comparisons = list(c("Timebin 1 Preinduction", "Timebin 2 Preinduction")),
               map_signif_level = TRUE,
-              y_position = 30,
-              annotations = c("0.0259")) +
+              y_position = 110,
+              annotations = c("0.4855")) +
   geom_signif(comparisons = list(c("Timebin 1 1st week post induction", "Timebin 2 1st week post induction")),
               map_signif_level = TRUE,
-              y_position = 40,
-              annotations = c("0.7341")) +
+              y_position = 115,
+              annotations = c("0.0860")) +
   geom_signif(comparisons = list(c("Timebin 1 2nd week post induction", "Timebin 2 2nd week post induction")),
               map_signif_level = TRUE,
-              y_position = 50,
-              annotations = c("0.0953")) +
+              y_position = 120,
+              annotations = c("0.1148")) +
   
   # Add mean and error bars
   geom_crossbar(stat = "summary", fun = mean, width = 0.2, fatten = 1.5, position = position_dodge(width = 0.75)) +
@@ -182,6 +196,5 @@ ggplot(df, aes(x = interaction(Timebin, Week, sep = " "), y = light_preference))
   
   # Improve theme
   theme(text = element_text(size = 13),
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
-    ylim(0, 55)
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
 ```
