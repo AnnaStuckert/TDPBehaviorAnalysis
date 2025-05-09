@@ -20,7 +20,7 @@ p_load(readxl, tidyverse)
 p_load(broom, ggsignif, multcomp, emmeans, DescTools)
 pacman::p_load(readxl)
 # xlsx files
-df <- read_excel("OFT_longitudinal_data.xlsx")
+df <- read_excel("3CT_larger_arena.xlsx")
 
 ```
 
@@ -33,99 +33,58 @@ df<-df[!(df$ID==262),]
 
 ```
 
+
+Add 1cm zone with surrounding zone
+```{r}
+df <- df %>% mutate(social_time=(`In zone SocialZone multiCond cumulative s`+df$SocialZoneRound))
+
+df <- df %>% mutate(novel_time=(`In zone NoveltyZone multiCond cumulative s`+df$NoveltyZoneRound))
+
+```
+
+
+Divide dataset up into Habituation, social, and novelty phases
+
+```{r}
+#habituation_cond <-  df_complete %>% filter(Condition == "Hab")
+#social_cond<-  df_complete %>% filter(Condition == "Social")
+#novelty_cond<-  df_complete %>% filter(Condition == "Novel")
+
+#use this for LMM approach with full sample size
+habituation_cond <-  df %>% filter(Condition == "Hab")
+social_cond<-  df %>% filter(Condition == "Social")
+novelty_cond<-  df %>% filter(Condition == "Novel")
+```
+
+with 1cm zone and surrounding zone
+```{r}
+habituation_cond <- habituation_cond %>% mutate(social_preference_relative=((`In zone SocialZone multiCond cumulative s`-`In zone NoveltyZone multiCond cumulative s`)/(`In zone NoveltyZone multiCond cumulative s`+`In zone SocialZone multiCond cumulative s`)))
+
+
+
+social_cond <- social_cond %>% mutate(social_preference_relative=((social_cond$social_time-social_cond$novel_time)/(social_cond$social_time+social_cond$novel_time)))
+
+novelty_cond <- novelty_cond %>% mutate(novelty_preference_relative=((novelty_cond$novel_time-novelty_cond$social_time)/(novelty_cond$novel_time+novelty_cond$social_time)))
+
+```
+
 ```{r}
 # Load necessary libraries
 library(readxl)
 library(dplyr)
 
 
-# Rename column for easier access
-df2 <- df %>%
-  rename(distance = `Distance moved cm`)
-
-df2<-  df2 %>% mutate(periphery_preference=(`In zone periphery cumulative s`/(`In zone Center cumulative s`+`In zone periphery cumulative s`)*100))
-
-
 # Group by 'Week' and calculate mean and standard deviation
-summary_stats <- df2 %>%
+summary_stats <- social_cond %>%
   group_by(Week) %>%
   summarise(
-    mean_distance = mean(distance, na.rm = TRUE),
-    sd_distance = sd(distance, na.rm = TRUE)
+    mean_variable = mean(social_preference_relative, na.rm = TRUE),
+    sd_variable = sd(social_preference_relative, na.rm = TRUE)
   )
 
 # Print results
 print(summary_stats)
 
-```
-
-
-My data, testing simple dropout scenario
-
-```{r}
-#Generate complete data (no missingness initially)
-n <- 13  # Total of 13 mice
-
-# Generate a random offset factor for each mouse
-offset <- rnorm(n, 0, 5)
-
-# Generate the data for 3 weeks for each mouse
-df <- data.frame(
-  id    = 1:n,
-  week1 = rnorm(n, 4682.097	, 844.2551) + offset,
-  week2 = rnorm(n, 5136.659	, 920.0022	) + offset,
-  week3 = rnorm(n, 6197.830, 920.0022) + offset
-)
-
-#Dropout in Week 3 (2 mice drop out in the original data, so I replicate that here) 
-# Identify 2 mice that drop out in Week 3 randomly
-set.seed(123) 
-drop_out_week3 <- sample(1:n, 2)  # Randomly choose 2 mice to drop out
-
-# Set Week 3 to missing for those who dropped out
-df$week3[drop_out_week3] <- NA
-
-# Print the resulting dataframe
-print(df)
-
-```
-
-```{r}
-generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
-  
-  set.seed(seed)
-  
-  # Generate an offset for each mouse
-  offset <- rnorm(n_mice, 0, 5)
-  
-  # Base means and SDs for each week (from your real summary data)
-  pre_mean  <- 4682.097
-  pre_sd    <- 844.2551
-  week1_mean <- 5136.659
-  week1_sd   <- 920.0022
-  week2_mean <- 6197.830
-  week2_sd   <- 920.0022
-  
-  # If no effect, keep all weeks similar
-  if (!effect) {
-    week1_mean <- pre_mean
-    week2_mean <- pre_mean
-  }
-  
-  # Generate data
-  df <- data.frame(
-    id = 1:n_mice,
-    week_preinduction = rnorm(n_mice, pre_mean, pre_sd) + offset,
-    week_post1 = rnorm(n_mice, week1_mean, week1_sd) + offset,
-    week_post2 = rnorm(n_mice, week2_mean, week2_sd) + offset
-  )
-  
-  # Simulate dropout: randomly make 2 mice missing in week_post2
-  drop_out <- sample(1:n_mice, 2)
-  df$week_post2[drop_out] <- NA
-  
-  return(df)
-}
 ```
 
 
@@ -140,12 +99,12 @@ generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
   set.seed(seed)
   offset <- rnorm(n_mice, 0, 5)
 
-  pre_mean  <- 4682.097
-  pre_sd    <- 844.2551
-  week1_mean <- 5136.659
-  week1_sd   <- 920.0022
-  week2_mean <- 6197.830
-  week2_sd   <- 920.0022
+  pre_mean  <- 0.7360542	
+  pre_sd    <- 0.3123088	
+  week1_mean <- 0.4530723	
+  week1_sd   <- 0.3123088
+  week2_mean <- 0.2482669	
+  week2_sd   <- 0.5282258	
 
   if (!effect) {
     week1_mean <- pre_mean
@@ -159,7 +118,7 @@ generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
     week_post2 = rnorm(n_mice, week2_mean, week2_sd) + offset
   )
 
-  drop_out <- sample(1:n_mice, 2)
+  drop_out <- sample(1:n_mice, 5)
   df$week_post2[drop_out] <- NA
 
   return(df)
@@ -245,20 +204,25 @@ cat("\nSingular Fit Summary (Null Model):\n")
 print(singular_table_null)
 
 ```
-
 ```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+
 
 # Group by 'Week' and calculate mean and standard deviation
-summary_stats <- df2 %>%
+summary_stats <- novelty_cond %>%
   group_by(Week) %>%
   summarise(
-    mean_distance = mean(periphery_preference, na.rm = TRUE),
-    sd_distance = sd(periphery_preference, na.rm = TRUE)
+    mean_variable = mean(novelty_preference_relative, na.rm = TRUE),
+    sd_variable = sd(novelty_preference_relative, na.rm = TRUE)
   )
 
 # Print results
 print(summary_stats)
+
 ```
+
 
 ```{r}
 library(lmerTest)
@@ -271,12 +235,12 @@ generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
   set.seed(seed)
   offset <- rnorm(n_mice, 0, 5)
 
-  pre_mean  <- 78.49710
-  pre_sd    <- 7.603342	
-  week1_mean <- 86.50555	
-  week1_sd   <- 6.354943	
-  week2_mean <- 89.91215
-  week2_sd   <- 5.796041
+  pre_mean  <- 0.26170698	
+  pre_sd    <- 0.3904774		
+  week1_mean <- 0.07138255	
+  week1_sd   <- 0.3670438	
+  week2_mean <- -0.03047966
+  week2_sd   <- 0.3138262
 
   if (!effect) {
     week1_mean <- pre_mean
@@ -290,7 +254,7 @@ generate_mouse_data <- function(n_mice = 13, seed = 123, effect = TRUE) {
     week_post2 = rnorm(n_mice, week2_mean, week2_sd) + offset
   )
 
-  drop_out <- sample(1:n_mice, 2)
+  drop_out <- sample(1:n_mice, 5)
   df$week_post2[drop_out] <- NA
 
   return(df)
@@ -376,4 +340,3 @@ cat("\nSingular Fit Summary (Null Model):\n")
 print(singular_table_null)
 
 ```
-

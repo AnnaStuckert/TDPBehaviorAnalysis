@@ -390,7 +390,7 @@ ggplot(social_cond, aes(x = Week, y = social_preference_relative)) +
   geom_signif(comparisons = list(c("Preinduction", "1st week post induction")),
               map_signif_level = TRUE,
               y_position = 1.3,
-              annotations = c("0.1146")) +
+              annotations = c("0.1452")) +
   geom_signif(comparisons = list(c("Preinduction", "2nd week post induction")),
               map_signif_level = TRUE,
               y_position = 1.15,
